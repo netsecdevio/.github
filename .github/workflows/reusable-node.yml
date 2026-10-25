@@ -1,0 +1,58 @@
+name: Node quality
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "22"
+      working-directory:
+        type: string
+        default: "."
+      run-tests:
+        type: boolean
+        default: true
+      run-build:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      # Each step runs only when the repo actually defines that script,
+      # so a repo adopts checks by adding scripts, not by editing CI.
+      - name: Lint
+        run: npm run --if-present lint
+
+      - name: Types
+        run: npm run --if-present typecheck
+
+      - name: Tests
+        if: inputs.run-tests
+        run: npm run --if-present test
+
+      - name: Build
+        if: inputs.run-build
+        run: npm run --if-present build

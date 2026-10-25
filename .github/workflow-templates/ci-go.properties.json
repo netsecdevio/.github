@@ -1,0 +1,8 @@
+{
+  "name": "Go CI",
+  "description": "gofmt, go vet, golangci-lint and go test via the org reusable workflow.",
+  "iconName": "octicon check-circle",
+  "categories": [
+    "go"
+  ]
+}

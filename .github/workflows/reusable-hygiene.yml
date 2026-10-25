@@ -1,0 +1,55 @@
+name: Repo hygiene
+
+# Language-agnostic checks every netsecdevio repo runs.
+
+on:
+  workflow_call:
+    inputs:
+      check-pr-title:
+        description: Require a Conventional Commits PR title (it becomes the squash subject).
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    # Squash is the only merge method, so the PR title is the commit message.
+    if: github.event_name == 'pull_request' && inputs.check-pr-title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Conventional Commits subject
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\([a-z0-9._/-]+\))?!?: .{1,}$'
+          if ! printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "::error::PR title must be Conventional Commits, e.g. 'fix(httpproxy): resolve launcher path'."
+            echo "Got: $TITLE"
+            exit 1
+          fi
+
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint workflow files
+        uses: raven-actions/actionlint@v2
+        with:
+          fail-on-error: true
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,23 @@
+name: Shell quality
+
+on:
+  workflow_call:
+    inputs:
+      severity:
+        description: Minimum shellcheck severity that fails the build.
+        type: string
+        default: warning
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: ${{ inputs.severity }}

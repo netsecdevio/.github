@@ -1,0 +1,9 @@
+{
+  "name": "Node / TypeScript CI",
+  "description": "npm ci, lint, typecheck, test and build via the org reusable workflow.",
+  "iconName": "octicon check-circle",
+  "categories": [
+    "javascript",
+    "typescript"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Shell CI",
+  "description": "ShellCheck across the repository via the org reusable workflow.",
+  "iconName": "octicon check-circle",
+  "categories": [
+    "shell"
+  ]
+}
