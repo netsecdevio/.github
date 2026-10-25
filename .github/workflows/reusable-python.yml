@@ -1,0 +1,59 @@
+name: Python quality
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to test against. 3.13 is the org floor.
+        type: string
+        default: "3.13"
+      package-dir:
+        description: Directory ruff and ty inspect.
+        type: string
+        default: "."
+      run-tests:
+        description: Run pytest. Disable for repos without a suite yet.
+        type: boolean
+        default: true
+      types-advisory:
+        description: >-
+          Report ty findings without failing the build. Temporary escape hatch
+          for a repo that is not clean yet; remove it once the repo passes.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Lint
+        run: uvx ruff check --output-format=github ${{ inputs.package-dir }}
+
+      - name: Format
+        run: uvx ruff format --check --diff ${{ inputs.package-dir }}
+
+      - name: Types
+        continue-on-error: ${{ inputs.types-advisory }}
+        run: uvx ty check ${{ inputs.package-dir }}
+
+      - name: Tests
+        if: inputs.run-tests
+        run: |
+          if [ -f pyproject.toml ] && grep -q "\[project\]" pyproject.toml; then
+            uv sync --all-extras --dev || uv pip install --system -e ".[dev]" || true
+          elif [ -f requirements.txt ]; then
+            uv pip install --system -r requirements.txt
+          fi
+          uvx --with pytest pytest -q

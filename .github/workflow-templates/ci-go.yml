@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [$default-branch]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  hygiene:
+    uses: netsecdevio/.github/.github/workflows/reusable-hygiene.yml@main
+
+  quality:
+    uses: netsecdevio/.github/.github/workflows/reusable-go.yml@main

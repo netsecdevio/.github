@@ -1,0 +1,8 @@
+{
+  "name": "Python CI",
+  "description": "Ruff lint and format, mypy, pytest via the org reusable workflow.",
+  "iconName": "octicon check-circle",
+  "categories": [
+    "python"
+  ]
+}
