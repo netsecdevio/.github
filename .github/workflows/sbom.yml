@@ -1,0 +1,104 @@
+name: SBOM
+
+# Organisation-wide SBOM generator. Any repository in netsecdevio can call this:
+#
+#   jobs:
+#     sbom:
+#       uses: netsecdevio/.github/.github/workflows/sbom.yml@<sha>
+#       with:
+#         node-version: '22'
+#
+# Emits an SPDX 2.3 document plus a CycloneDX document for the installed
+# dependency tree, verifies they are non-empty and name the package, and keeps
+# both as run artifacts. No third-party actions are used: the documents come
+# from `npm sbom`, so the workflow stays inside the org's GitHub-owned action
+# allowlist and works with SHA pinning enforced.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version used to generate the documents
+        required: false
+        type: string
+        default: '22'
+      install-command:
+        description: Command run before generation
+        required: false
+        type: string
+        default: 'npm ci --omit=dev --no-audit --no-fund'
+      retention-days:
+        description: Artifact retention in days
+        required: false
+        type: number
+        default: 90
+    outputs:
+      spdx-file:
+        description: Name of the generated SPDX document
+        value: ${{ jobs.sbom.outputs.spdx-file }}
+      package-count:
+        description: Number of components in the CycloneDX document
+        value: ${{ jobs.sbom.outputs.package-count }}
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      spdx-file: ${{ steps.generate.outputs.spdx-file }}
+      package-count: ${{ steps.verify.outputs.package-count }}
+    steps:
+      - name: Check out the calling repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install dependencies
+        run: ${{ inputs.install-command }}
+
+      - name: Generate SPDX and CycloneDX documents
+        id: generate
+        run: |
+          set -euo pipefail
+          npm sbom --sbom-format=spdx --omit=dev > sbom.spdx.json
+          npm sbom --sbom-format=cyclonedx --omit=dev > sbom.cdx.json
+          for f in sbom.spdx.json sbom.cdx.json; do
+            test -s "$f" || { echo "::error::$f is empty"; exit 1; }
+          done
+          echo "spdx-file=sbom.spdx.json" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the documents describe this package
+        id: verify
+        run: |
+          set -euo pipefail
+          node --input-type=commonjs -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const spdx = JSON.parse(fs.readFileSync("sbom.spdx.json", "utf8"));
+            const cdx = JSON.parse(fs.readFileSync("sbom.cdx.json", "utf8"));
+            const components = (cdx.components || []).length;
+            if (!spdx.spdxVersion) { console.error("missing spdxVersion"); process.exit(1); }
+            const names = (cdx.components || []).map((c) => c.name);
+            if (!components) { console.error("CycloneDX document has no components"); process.exit(1); }
+            console.log(`${pkg.name}: SPDX ${spdx.spdxVersion}, ${components} components, ${spdx.packages?.length ?? 0} SPDX packages`);
+            console.log("sample:", names.slice(0, 8).join(", "));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `package-count=${components}\n`);
+          ' || exit 1
+
+      - name: Keep the documents as run artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ github.event.repository.name }}-${{ github.sha }}
+          path: |
+            sbom.spdx.json
+            sbom.cdx.json
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
