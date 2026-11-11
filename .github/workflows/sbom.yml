@@ -23,10 +23,10 @@ on:
         type: string
         default: '22'
       install-command:
-        description: Command run before generation
+        description: Command run before generation (a complete install; the documents are filtered afterwards)
         required: false
         type: string
-        default: 'npm ci --omit=dev --no-audit --no-fund'
+        default: 'npm ci --no-audit --no-fund'
       retention-days:
         description: Artifact retention in days
         required: false
@@ -62,7 +62,15 @@ jobs:
           node-version: ${{ inputs.node-version }}
 
       - name: Install dependencies
-        run: ${{ inputs.install-command }}
+        run: |
+          set -euo pipefail
+          # The whole tree must be present: npm sbom fails with ESBOMPROBLEMS
+          # when declared dependencies are absent, even ones it will omit.
+          if [ -f package-lock.json ]; then
+            ${{ inputs.install-command }}
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Generate SPDX and CycloneDX documents
         id: generate
